@@ -31,7 +31,10 @@ int main(int argc, char *argv[])
     char buf[1024];
 
     if (argc != 3)
-        error("Usage: <port> <error_rate>");
+        error("Missing arguments: <port> <error_rate>");
+
+    int errorRate = atoi(argv[2]) * 10, // between 0.1 - 0.9
+            packetCounter = 0;
 
     sock=socket(AF_INET, SOCK_DGRAM, 0); // AF_INET = ipv4 address type; SOCK_DGRAM = UDP socket
 
@@ -50,23 +53,29 @@ int main(int argc, char *argv[])
     // in UDP protocol, there's no need for "Listen", so we just receive packets and that's all
     while (1)
     {
+        if ((packetCounter + 3) % 10 == errorRate) // artificial error
+        {
+            packetCounter++;
+            continue;
+
+        }
         n = recvfrom(sock, buf, 1024, 0, (struct sockaddr *)&from, &fromlen);
 
-        if (n < 0) error("recvfrom"); // if nothing received
+        //        if (n < 0) error("recvfrom"); // if nothing received
 
         this_thread::sleep_for(chrono::milliseconds(10)); // processing for 0.01 seconds
 
         // STDOUT for monitoring purpose
-        write(1,"Received a datagram: ",21);
+        const char* tmp = to_string(packetCounter + 1).c_str();
+        write(1, tmp, sizeof(tmp));
+        write(1," Received a datagram: ",21);
         write(1,buf,n);
-        while(1)
-        {
-            n = sendto(sock,"Got your message\n",17, // ack
-                       0,(struct sockaddr *)&from,fromlen);
 
-            if (n  < 0) continue; // "stop and wait" until packet reaches its destination
-            else break;
-        }
+        n = sendto(sock,"Got your message\n",17, // ack
+                   0,(struct sockaddr *)&from,fromlen);
+
+
+        packetCounter++;
     }
     return 0;
 }
