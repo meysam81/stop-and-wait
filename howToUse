@@ -1,0 +1,6 @@
+g++ -std=c++11 client.cpp -o client -lpthread
+g++ -std=c++11 server.cpp -o server
+
+
+./server 8080 0.1
+./client 127.0.0.1 8080 0.1
