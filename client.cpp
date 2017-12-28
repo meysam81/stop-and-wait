@@ -12,7 +12,11 @@
 #include <cstdlib>
 #include <iostream>
 #include <thread>
+#include <mutex>
 using namespace std;
+
+mutex mut;
+int packetCounter = 0;
 
 void error(const char *msg)
 {
@@ -25,7 +29,7 @@ int _main(char *argv[]);
 int main(int argc, char *argv[])
 {
     if (argc != 4)
-        error("missing arguments: <ip_address> <port> <error_rate>");
+        error("Missing arguments: <ip_address> <port> <error_rate>");
 
     int N = 10; // number of threads
     thread t[N];
@@ -38,7 +42,8 @@ int main(int argc, char *argv[])
 
 int _main(char *argv[])
 {
-    int sock, n;
+    int sock, n,
+            errorRate = atoi(argv[3]) * 10; // between 0.1 - 0.9
     unsigned int length = sizeof(struct sockaddr_in);;
     struct sockaddr_in server, from;
     struct hostent *hp;
@@ -63,18 +68,28 @@ int _main(char *argv[])
     bool flag = true;
     while (flag)
     {
-        while (1)
         {
-            n = sendto(sock,buffer,
-                       strlen(buffer),0,(const struct sockaddr *)&server,length);
-            if (n < 0) continue;
-            else break;
+            lock_guard<mutex> guard(mut); // to control race condition and lost update
+            if (packetCounter % 10 == errorRate)
+            {
+                packetCounter++;
+                continue;
+            }
         }
+        n = sendto(sock,buffer,
+                   strlen(buffer),0,(const struct sockaddr *)&server,length);
+
         n = recvfrom(sock,buffer,256,0,(struct sockaddr *)&from, &length);
-        if (n < 0) error("recvfrom");
+        //        if (n < 0) error("recvfrom");
 
         // STDOUT
-        write(1,"Got an ack: ",12);
+        {
+            lock_guard<mutex> guard(mut); // race condition
+            const char* tmp = to_string(packetCounter + 1).c_str();
+            packetCounter++;
+            write(1, tmp, sizeof(tmp));
+        }
+        write(1," Got an ack: ",12);
         write(1,buffer,n);
 
         secondsPassed = (clock() - startTime) / CLOCKS_PER_SEC;
